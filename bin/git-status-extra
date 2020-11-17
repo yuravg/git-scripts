@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+# Show extended Git status for working tree and submodules
+
+GREEN="$(tput setaf 2)"
+NORMAL="$(tput sgr0)"
+if [ "$1" = "--color" ] || [ "$2" = "--color" ] || \
+       [ "$1" = "-c" ] || [ "$2" = "-c" ] ; then
+    COLOR_TITLE="$GREEN"
+else
+    COLOR_TITLE="$NORMAL"
+fi
+
+if [ "$1" = "--last" ] || [ "$2" = "--last" ] || \
+       [ "$1" = "-l" ] || [ "$2" = "-l" ] ; then
+    SHOW_LAST_COMMIT=1
+else
+    SHOW_LAST_COMMIT=0
+fi
+
+sm_status() {
+    # short sha1
+    git submodule status --recursive | sed 's/\([^abcdef0-9]\{,2\}\)\([abcdef0-9]\{7\}\)\([abcdef0-9]\{33\}\)\(.*\)/\1\2\4/'
+}
+
+sm_state() {
+    git submodule foreach --recursive "git status --short"
+}
+
+sm_summary() {
+    git submodule summary --summary-limit 3
+}
+
+last_commit() {
+    git log -1 HEAD --pretty=format:'%h %d %s (%cr) <%an>'
+}
+
+submodules_last_commit() {
+    git submodule foreach --recursive "git log -1 HEAD --pretty=format:'%h %d %s (%cr) <%an>'"
+}
+
+echo_cmd() {
+    echo "${COLOR_TITLE}$1${NORMAL}"
+    echo
+}
+
+echo_cmd "# Working tree status:"
+
+git status --short --branch
+
+if [ "$SHOW_LAST_COMMIT" -eq 1 ]; then
+    echo
+    echo "Last commit subject:"
+    last_commit
+fi
+
+SM_STATUS_LOG=$(sm_status)
+if [ -n "$SM_STATUS_LOG" ]; then
+    echo
+    echo_cmd "# Submodule(s):"
+    echo "Status:"
+    echo "$SM_STATUS_LOG"
+
+    SM_SUMMARY_LOG=$(sm_summary)
+    if [ -n "$SM_SUMMARY_LOG" ]; then
+        echo
+        echo "Summary:"
+        sm_summary
+    else
+        # sm_summary command has empty lane
+        echo
+    fi
+
+    echo "State:"
+    sm_state
+    # echo "$ST_LOG" | sed "s/Entering\s*'.*'\s*//"
+    # echo "$ST_LOG" | sed "s/$/!!!!/"
+
+    if [ "$SHOW_LAST_COMMIT" -eq 1 ]; then
+        echo
+        echo "Last commit subject:"
+        submodules_last_commit
+    fi
+fi
