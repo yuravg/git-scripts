@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Clean up the repository from Git reflogs
+
+echo -n "Sure? - This command will remove ALL reflogs [y/N]: "
+read -r ans
+if [ "$ans" = "y" ]; then
+    git reflog expire --all --expire=now
+    git gc --prune=now --aggressive
+fi
