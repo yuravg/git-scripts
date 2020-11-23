@@ -1,0 +1,8 @@
+#+TITLE: Scripts for Git
+#+AUTHOR: Yuriy Gritsenko
+#+startup: inlineimages
+
+* List of scripts
+
+- git-clear-reflog - clean up the repository from Git reflogs
+- git-status-extra - show extended Git status for working tree and submodules
