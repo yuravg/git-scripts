@@ -6,3 +6,13 @@
 
 - git-clear-reflog - clean up the repository from Git reflogs
 - git-status-extra - show extended Git status for working tree and submodules
+
+* Installation
+** Download project
+=git clone https://github.com/yuravg/git-scripts= or [[https://github.com/yuravg/git-scripts/archive/master.zip][zip-file]]
+
+** Setup
+You may copy scripts from =git-scripts/bin= to any of your =PATH= directories or use one of installation scripts:
+- =install.sh= - copy all git-scripts to $HOME/bin directory
+- =install_mklink.sh= - creates symbolic links in the $HOME/bin directory pointing to git-scripts files (Linux OS)
+- =install_mklink.ps1= - creates symbolic links in the $HOME/bin directory pointing to git-scripts files (Windows OS)
