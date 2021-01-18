@@ -2,6 +2,20 @@
 
 # Show extended Git status for working tree and submodules
 
+SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
+if [ "$1" = '-h' ] || [ "$1" = '--help' ]; then
+    echo "Usage:"
+    echo "  $SCRIPT_NAME [-c|--color] [-l|--last]"
+    echo
+    echo "OPTIONS:"
+    echo "    -c|--color"
+    echo "                 use color output."
+    echo
+    echo "    -l|--last"
+    echo "                 show last commit."
+    exit 0
+fi
+
 GREEN="$(tput setaf 2)"
 NORMAL="$(tput sgr0)"
 if [[ "$1" = "--color" || "$2" = "--color" \
