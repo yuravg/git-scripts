@@ -7,6 +7,51 @@
 - git-clear-reflog - clean up the repository from Git reflogs
 - git-status-extra - show extended Git status for working tree and submodules
 
+*** git-status-extra
+
+Show extended Git status for working tree and submodules
+
+  #+begin_src text
+$ git status-extra
+
+# Working tree status:
+
+## Branch-name
+ ?? file1-or-directory1-name
+ ?? file2-or-directory2-name
+
+Last commit subject:
+hash (branch/tag/hash) Commit. (date) <Author>
+
+# Submodule(s):
+
+Status:
+ a123456 path2submodule1/submodule1 (branch/tag/hash)
++b123456 path2submodule2/submodule2 (branch/tag/hash)
+-b123456 path2submodule3/submodule3 (branch/tag/hash)
+
+Summary:
+ * path2submodule2/submodule2 hash-one...hash-other (3):
+   < Commit1
+   < Commit2
+   < Commit3
+
+State:
+Entering: 'name1'
+ M  file1-or-directory1-name
+ ?? file2-or-directory2-name
+Entering: 'name2'
+Entering: 'name3'
+
+Last commit subject:
+Entering 'name1'
+hash (branch/tag/hash) Name1 Commit. (date) <Author>
+Entering 'name2'
+hash (branch/tag/hash) Name2 Commit. (date) <Author>
+Entering 'name3'
+hash (branch/tag/hash) Name3 Commit. (date) <Author>
+  #+end_src
+
 * Installation
 ** Download project
 =git clone https://github.com/yuravg/git-scripts= or [[https://github.com/yuravg/git-scripts/archive/master.zip][zip-file]]
