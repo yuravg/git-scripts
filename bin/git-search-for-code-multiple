@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Find files that contain multiple terms, not necessarily on the same line
+#
+# Match any of these patterns, but print matches only from files that have all of them (files
+# must have lines that match each of them)
+#
+# Links: https://github.com/fniessen/git-leuven#find-files-that-contain-multiple-terms-not-necessarily-on-the-same-line
+#        https://askubuntu.com/questions/1019678/find-multiple-word-patterns-in-files
+
+SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
+if [ "$#" -eq 0 ] || [ "$#" -gt 4 ] || \
+       [ "$1" = '-h' ] || [ "$1" = '--help' ] || [ "$1" = '-help' ]; then
+    echo "Usage:"
+    echo "  $SCRIPT_NAME [regexp1] [regexp2] [regexp3] [regexp4]"
+    echo
+    echo "ARGS:"
+    echo "    <regexp1>"
+    echo "            The first REGEXP."
+    echo "    <regexp2>"
+    echo "            Second REGEXP."
+    echo "    <regexp3>"
+    echo "            Third REGEXP(optional)."
+    echo "    <regexp4>"
+    echo "            Fourth REGEXP(optional)."
+    exit 0
+fi
+
+if [ "$#" -eq 2 ]; then
+    git grep -i -I --line-number --break --heading -C 1 -e "$1" -e "$2" --all-match
+elif [ "$#" -eq 3 ]; then
+    git grep -i -I --line-number --break --heading -C 1 -e "$1" -e "$2" -e "$3" --all-match
+elif [ "$#" -eq 4 ]; then
+    git grep -i -I --line-number --break --heading -C 1 -e "$1" -e "$2" -e "$3" -e "$4" --all-match
+fi
