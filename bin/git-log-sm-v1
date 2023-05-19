@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# https://stackoverflow.com/questions/10741801/include-submodule-commit-messages-with-git-log
+
+git log --graph --oneline -U0 --submodule Tag1..Tag2 | grep -E '^[*| /\\]+([0-9a-f]{7} |Submodule |> |$)'
