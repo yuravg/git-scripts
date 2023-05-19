@@ -5,6 +5,7 @@
 * List of scripts
 
 - git-clear-reflog - clean up the repository from Git reflogs
+- git-search-for-code-multiple - find files that contain multiple terms, not necessarily on the same line
 - git-status-extra - show extended Git status for working tree and submodules
 
 *** git-status-extra
