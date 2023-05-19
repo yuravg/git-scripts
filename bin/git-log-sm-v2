@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+
+# https://stackoverflow.com/questions/10741801/include-submodule-commit-messages-with-git-log
+
+# regular expressions related to git log output
+# when using options -U0 and --submodule=log
+kREGEXP_ADD_SUBMODLE='0+\.\.\.[0-9a-f]+'
+kREGEXP_REM_SUBMODLE='[0-9a-f]+\.\.\.0+'
+
+# --------------------------------------------------------------------
+# function submodule_log
+# --------------------------------------------------------------------
+#
+# print a log of submodule changes for a range of commits
+#
+# arguments : see start of function body for details
+#
+function submodule_log {
+
+    sm_present=$1; # presence 0: no, 1: yes
+    sm_status=$2   # status   0: as is, 1: added submodule, 2: removed submodule
+    sm_name=$3     # name
+    sm_id_base=$4  # base commit id added changes
+    sm_id_now=$5   # final commit id added changes
+
+    cur_dir=`pwd`
+
+    # commits cannot be accessed if sbumodule working tree was removed,
+    # show submodule commits in details only if directory exists
+    #
+    # note: As of git 1.9, in .git/modules/<submodule-name>
+    #       still the entire gitdir is present, just git won't successfully
+    #       run something like 'git --git-dir .git/modules/<submodule-name> log f374fbf^!'
+    #       from the superproject root dir. It fails as it want's to change directory to
+    #       to the submodule working tree at '../../../<submodule-name>' to get the log.
+    #       If one just creates it as an empty directory the command succeeds, but
+    #       we cannot force the user to leave an empty directory. So just a hint
+    #       is output to suggest creation of directory to get full log.
+
+    #echo " $submod_entry"
+
+    if [ -e $sm_name ]
+    then
+        cd $sm_name
+
+        # if submodule not present in current version of superproject
+        # can retrieve git log info only by using option '--git-dir'
+        # -> use always option --git-dir
+
+        git_dir_opt="--git-dir $cur_dir/.git/modules/$sm_name"
+        git_cmd_base="git $git_dir_opt log --format=\"  %Cred%h %s%Creset\""
+
+        if [ $sm_status -eq 0 ]
+        then
+            # modified module: output info on added commit(s)
+            eval "$git_cmd_base ${sm_id_base}..${sm_id_now}"
+        fi
+
+        if [ $sm_status -eq 1 ]
+        then
+            # new module: output only info on base commit
+            eval "$git_cmd_base ${sm_id_now}^!"
+        fi
+
+        if [ $sm_status -eq 2 ]
+        then
+            # removed module: output only info on last commit
+            eval "$git_cmd_base ${sm_id_base}^!"
+        fi
+
+        cd $cur_dir
+    else
+        echo " Skip info on submodule $sm_name (not present in current working tree)"
+        echo " For full log, please add empty directory $sm_name for full log."
+    fi
+}
+
+# --------------------------------------------------------------------
+# main script
+# --------------------------------------------------------------------
+
+# Get the log of the parent repository (only SHA1 and parent's SHA1),
+# use files as amount of data might be huge in older repos
+
+# get commit ids as array
+readarray -t log_commitids < <(git log --format="%H")
+
+# get commit ids of parent commits
+readarray -t log_parents < <(git log --format="%P")
+
+for ((c_idx=0; $c_idx<${#log_commitids[@]}; c_idx=$c_idx+1))
+do
+    # Can only be one commit id, but remove trailing newline and linefeed
+    commit="${log_commitids[$c_idx]//[$'\r\n']}"
+
+    # Can be more than one parent if it's a merge
+    # remove trailing newline and linefeed
+    parents="${log_parents[$c_idx]//[$'\r\n']}"
+    parents_a=($(echo $parents))
+    num_parents=${#parents_a[@]}
+
+    # check if merge commit, prefix next commit with M as they are merge
+    merge_prefix=""
+    if [ $num_parents -ge 2 ]
+    then
+        merge_prefix="M$num_parents"
+    fi
+
+    # Print the two-line summary for this commit
+    git log --format="%Cgreen%h (%cI %cN)%Creset%n %Cgreen$merge_prefix%Creset %s" $commit^!
+
+    #echo "found $num_parents parents"
+
+    if [ "$parents" = "" ]
+    then
+       unset parents
+    else
+
+        for parent in $parents
+        do
+            # Find entires like
+            #  "Submodule libA 0000000...f374fbf (new submodule)"      or
+            #  "Submodule libA e51c470...0000000 (submodule deleted)"  or
+            #  "Submodule libA f374fbf..af648b2e:"
+            # in supermodules history in order to determine submodule's
+            # name and commit range describing the changes that
+            # were added to the supermodule. Two regular expressions
+            # kREGEXP_ADD_SUBMODLE and kREGEXP_REM_SUBMODLE are used
+            # to find added and removed submodules respectively.
+
+            readarray -t submod < <(git log -U0 --submodule=log ${parent}..${commit} \
+            | grep -U -P '^Submodule \S+ [0-9a-f]+')
+
+            for ((s_idx=0; $s_idx<${#submod[@]}; s_idx=$s_idx+1))
+            do
+                # remove trailing newline and linefeed
+                submod_entry="${submod[$s_idx]//[$'\r\n']}"
+
+                #echo mainly unfiltered as to show submod name and its
+                #commit range stored in repo's log
+                echo " $submod_entry"
+
+                # remove preceding info 'Submodule ' as we already know that :-)
+                submod_entry="${submod_entry/Submodule }"
+
+                # if viewing repository version for which submodules do not exist
+                # they are reported with correct commit ids but trailing text
+                # is different, first assume it is present then check submod_entry
+                submod_present=1
+                if [[ "$submod_entry" =~ "commits not present" ]]
+                then
+                   submod_present=0
+
+                   # remove trailing info about deleted submodule, if any
+                   submod_entry="${submod_entry/'(commits not present)'}"
+                fi
+
+                # find with submodule got added/modified/removed by this superproject commit
+                # assume 'modified' submodule, then check if commit range indicates
+                # special cases like added/removed submodule
+                sub_status=0
+                if [[ "$submod_entry" =~ $kREGEXP_ADD_SUBMODLE ]]
+                then
+                   sub_status=1
+
+                   # remove trailing info about new submodule, if any
+                   submod_entry="${submod_entry/'(new submodule)'}"
+                fi
+
+                if [[ "$submod_entry" =~ $kREGEXP_REM_SUBMODLE ]]
+                then
+                   sub_status=2
+
+                   # remove trailing info about deleted submodule, if any
+                   submod_entry="${submod_entry/'(submodule deleted)'}"
+                fi
+
+                # create log output for submod_entry
+                # - pass contents in submod_entry as separate arguments
+                #   by expanding variable and using eval to execute resulting code
+
+                #replace dots by spaces as to split apart source and destination commit id
+                submod_entry="${submod_entry//./ }"
+                #remove colon behind last commit id, if any
+                submod_entry="${submod_entry//:/}"
+
+                eval "submodule_log $submod_present $sub_status $submod_entry"
+            done
+        done
+    fi
+done
