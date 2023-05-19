@@ -4,9 +4,13 @@
 
 * List of scripts
 
-- git-clear-reflog - clean up the repository from Git reflogs
-- git-search-for-code-multiple - find files that contain multiple terms, not necessarily on the same line
-- git-status-extra - show extended Git status for working tree and submodules
+|------------------------------+--------------------------------------------------------------------------|
+| File                         | Description                                                              |
+|------------------------------+--------------------------------------------------------------------------|
+| [[file:bin/git-clear-reflog][git-clear-reflog]]             | Clean up the repository from Git reflogs                                 |
+| [[file:bin/git-search-for-code-multiple][git-search-for-code-multiple]] | Find files that contain multiple terms, not necessarily on the same line |
+| [[file:bin/git-status-extra][git-status-extra]]             | Show extended Git status for working tree and submodules                 |
+|------------------------------+--------------------------------------------------------------------------|
 
 *** git-status-extra
 
