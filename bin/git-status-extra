@@ -9,9 +9,9 @@ if [ "$1" = '-h' ] || [ "$1" = '--help' ]; then
     echo
     echo "OPTIONS:"
     echo "    -c|--color"
-    echo "                 use color output."
-    echo
+    echo "            Use color output."
     echo "    -l|--last"
+    echo "            Show last commit."
     echo "                 show last commit."
     exit 0
 fi
