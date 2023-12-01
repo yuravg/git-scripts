@@ -5,31 +5,39 @@
 SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
 if [ "$1" = '-h' ] || [ "$1" = '--help' ]; then
     echo "Usage:"
-    echo "  $SCRIPT_NAME [-c|--color] [-l|--last]"
+    echo "  $SCRIPT_NAME [-c|--color] [-l|--last] [-d|--data]"
     echo
     echo "OPTIONS:"
     echo "    -c|--color"
     echo "            Use color output."
     echo "    -l|--last"
     echo "            Show last commit."
-    echo "                 show last commit."
+    echo "    -d|--data"
+    echo "            Enable user data format for commits."
     exit 0
 fi
 
 GREEN="$(tput setaf 2)"
 NORMAL="$(tput sgr0)"
-if [[ "$1" = "--color" || "$2" = "--color" \
-          || "$1" = "-c" || "$2" = "-c" ]] ; then
+if [[ "$1" = "--color" || "$2" = "--color" || "$3" = "--color" \
+          || "$1" = "-c" || "$2" = "-c" || "$3" = "-c" ]] ; then
     COLOR_TITLE="$GREEN"
 else
     COLOR_TITLE="$NORMAL"
 fi
 
-if [[ "$1" = "--last" || "$2" = "--last" \
-          || "$1" = "-l" || "$2" = "-l" ]] ; then
+if [[ "$1" = "--last" || "$2" = "--last" || "$3" = "--last" \
+          || "$1" = "-l" || "$2" = "-l"  || "$3" = "-l" ]] ; then
     SHOW_LAST_COMMIT=1
 else
     SHOW_LAST_COMMIT=0
+fi
+
+if [[ "$1" = "--data" || "$2" = "--data" || "$3" = "--data" \
+          || "$1" = "-d" || "$2" = "-d"  || "$3" = "-d" ]] ; then
+    USER_DATA_FORMAT=1
+else
+    USER_DATA_FORMAT=0
 fi
 
 sm_status() {
@@ -46,11 +54,19 @@ sm_summary() {
 }
 
 last_commit() {
-    git log -1 HEAD --pretty=format:'%h %d %s (%cr) <%an>'
+    if [[ "$USER_DATA_FORMAT" -ne 1 ]]; then
+        git log -1 HEAD --pretty=format:'%h %d %s (%cr) <%an>'
+    else
+        git log -1 HEAD --date=format:'%y-%m-%d %H:%M' --pretty=format:'%h %d %s (%ad) <%an>'
+    fi
 }
 
 submodules_last_commit() {
-    git submodule foreach --recursive "git log -1 HEAD --pretty=format:'%h %d %s (%cr) <%an>'"
+    if [[ "$USER_DATA_FORMAT" -ne 1 ]]; then
+        git submodule foreach --recursive "git log -1 HEAD --pretty=format:'%h %d %s (%cr) <%an>'"
+    else
+        git submodule foreach --recursive "git log -1 HEAD --date=format:'%y-%m-%d %H:%M' --pretty=format:'%h %d %s (%ad) <%an>'"
+    fi
 }
 
 echo_cmd() {
