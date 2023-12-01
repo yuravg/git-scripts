@@ -19,26 +19,25 @@ fi
 
 GREEN="$(tput setaf 2)"
 NORMAL="$(tput sgr0)"
-if [[ "$1" = "--color" || "$2" = "--color" || "$3" = "--color" \
-          || "$1" = "-c" || "$2" = "-c" || "$3" = "-c" ]] ; then
-    COLOR_TITLE="$GREEN"
-else
-    COLOR_TITLE="$NORMAL"
-fi
 
-if [[ "$1" = "--last" || "$2" = "--last" || "$3" = "--last" \
-          || "$1" = "-l" || "$2" = "-l"  || "$3" = "-l" ]] ; then
-    SHOW_LAST_COMMIT=1
-else
-    SHOW_LAST_COMMIT=0
-fi
-
-if [[ "$1" = "--data" || "$2" = "--data" || "$3" = "--data" \
-          || "$1" = "-d" || "$2" = "-d"  || "$3" = "-d" ]] ; then
-    USER_DATA_FORMAT=1
-else
-    USER_DATA_FORMAT=0
-fi
+COLOR_TITLE="$NORMAL"
+SHOW_LAST_COMMIT=0
+USER_DATA_FORMAT=0
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        -c|--color)
+            COLOR_TITLE="$GREEN"
+            shift;;
+        -l|--last)
+            SHOW_LAST_COMMIT=1
+            shift;;
+        -d|--data)
+            USER_DATA_FORMAT=1
+            SHOW_LAST_COMMIT=1
+            shift;;
+    esac
+done
 
 sm_status() {
     # short sha1
