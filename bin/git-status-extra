@@ -36,6 +36,9 @@ while [[ $# -gt 0 ]]; do
             USER_DATA_FORMAT=1
             SHOW_LAST_COMMIT=1
             shift;;
+        *)
+            echo Warning! Unexpected option: "$1"
+            shift;;
     esac
 done
 
