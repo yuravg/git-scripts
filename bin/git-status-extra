@@ -3,7 +3,8 @@
 # Show extended Git status for working tree and submodules
 
 SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
-if [ "$1" = '-h' ] || [ "$1" = '--help' ]; then
+usage() {
+
     echo "Usage:"
     echo "  $SCRIPT_NAME [-c|--color] [-1|--one] [-l|--last] [-d|--data]"
     echo
@@ -16,8 +17,7 @@ if [ "$1" = '-h' ] || [ "$1" = '--help' ]; then
     echo "            Show last commit."
     echo "    -d|--data"
     echo "            Enable user data format for commits."
-    exit 0
-fi
+}
 
 GREEN="$(tput setaf 2)"
 NORMAL="$(tput sgr0)"
@@ -29,6 +29,9 @@ USER_DATA_FORMAT=0
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
+        -h|--help)
+            usage
+            exit 0;;
         -c|--color)
             COLOR_TITLE="$GREEN"
             shift;;
