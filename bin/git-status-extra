@@ -5,11 +5,13 @@
 SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
 if [ "$1" = '-h' ] || [ "$1" = '--help' ]; then
     echo "Usage:"
-    echo "  $SCRIPT_NAME [-c|--color] [-l|--last] [-d|--data]"
+    echo "  $SCRIPT_NAME [-c|--color] [-1|--one] [-l|--last] [-d|--data]"
     echo
     echo "OPTIONS:"
     echo "    -c|--color"
     echo "            Use color output."
+    echo "    -1|--one"
+    echo "            Show last commit for the project only."
     echo "    -l|--last"
     echo "            Show last commit."
     echo "    -d|--data"
@@ -21,6 +23,7 @@ GREEN="$(tput setaf 2)"
 NORMAL="$(tput sgr0)"
 
 COLOR_TITLE="$NORMAL"
+SHOW_ONE_COMMIT=0
 SHOW_LAST_COMMIT=0
 USER_DATA_FORMAT=0
 while [[ $# -gt 0 ]]; do
@@ -28,6 +31,9 @@ while [[ $# -gt 0 ]]; do
     case $key in
         -c|--color)
             COLOR_TITLE="$GREEN"
+            shift;;
+        -1|--one)
+            SHOW_ONE_COMMIT=1
             shift;;
         -l|--last)
             SHOW_LAST_COMMIT=1
@@ -80,7 +86,7 @@ echo_cmd "# Working tree status:"
 
 git status --short --branch
 
-if [[ "$SHOW_LAST_COMMIT" -eq 1 ]]; then
+if [ "$SHOW_LAST_COMMIT" -eq 1 ] || [ "$SHOW_ONE_COMMIT" -eq 1 ]; then
     echo
     echo "Last commit subject:"
     last_commit
