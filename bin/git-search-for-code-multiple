@@ -8,28 +8,178 @@
 # Links: https://github.com/fniessen/git-leuven#find-files-that-contain-multiple-terms-not-necessarily-on-the-same-line
 #        https://askubuntu.com/questions/1019678/find-multiple-word-patterns-in-files
 
-SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
-if [ "$#" -eq 0 ] || [ "$#" -gt 4 ] || \
-       [ "$1" = '-h' ] || [ "$1" = '--help' ] || [ "$1" = '-help' ]; then
-    echo "Usage:"
-    echo "  $SCRIPT_NAME [regexp1] [regexp2] [regexp3] [regexp4]"
-    echo
-    echo "ARGS:"
-    echo "    <regexp1>"
-    echo "            The first REGEXP."
-    echo "    <regexp2>"
-    echo "            Second REGEXP."
-    echo "    <regexp3>"
-    echo "            Third REGEXP(optional)."
-    echo "    <regexp4>"
-    echo "            Fourth REGEXP(optional)."
-    exit 0
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "${BASH_SOURCE[0]}")
+
+MAX_PATTERNS=10
+DEFAULT_CONTEXT_LINES=1
+
+# Color codes for output (if terminal supports it)
+if [[ -t 1 ]]; then
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[0;33m'
+    readonly NC='\033[0m'
+else
+    readonly RED=''
+    readonly GREEN=''
+    readonly YELLOW=''
+    readonly NC=''
 fi
 
-if [ "$#" -eq 2 ]; then
-    git grep -i -I --line-number --break --heading -C 1 -e "$1" -e "$2" --all-match
-elif [ "$#" -eq 3 ]; then
-    git grep -i -I --line-number --break --heading -C 1 -e "$1" -e "$2" -e "$3" --all-match
-elif [ "$#" -eq 4 ]; then
-    git grep -i -I --line-number --break --heading -C 1 -e "$1" -e "$2" -e "$3" -e "$4" --all-match
+usage() {
+    cat << EOF
+Usage:
+  $SCRIPT_NAME [OPTIONS] <pattern1> <pattern2> [pattern3...pattern${MAX_PATTERNS}]
+
+Find files in a git repository that contain ALL specified patterns.
+Each pattern can appear on different lines within the same file.
+
+OPTIONS:
+    -h, --help            Show this help message
+    -c, --context NUM     Number of context lines to show (default: ${DEFAULT_CONTEXT_LINES})
+    -C, --color           Force colored output even when piping
+    -i, --ignore-case     Case insensitive search (default)
+    -I, --no-ignore-case  Case sensitive search
+    -n, --line-number     Show line numbers (default)
+    -N, --no-line-number  Don't show line numbers
+    -q, --quiet           Suppress normal output; only show filenames
+    -v, --verbose         Show debug information
+
+ARGUMENTS:
+    <pattern1>          First pattern (required)
+    <pattern2>          Second pattern (required)
+    <pattern3>...<pattern${MAX_PATTERNS}> Additional patterns (optional, up to ${MAX_PATTERNS} total)
+
+EXAMPLES:
+    # Find files containing both "TODO" and "FIXME"
+    $SCRIPT_NAME TODO FIXME
+
+    # Find files with all three patterns, case-sensitive, with 3 lines of context
+    $SCRIPT_NAME -I -c 3 function return error
+
+    # Just list files containing all patterns
+    $SCRIPT_NAME -q pattern1 pattern2 pattern3
+
+EOF
+}
+
+CONTEXT_LINES=$DEFAULT_CONTEXT_LINES
+IGNORE_CASE="-i"
+LINE_NUMBERS="--line-number"
+QUIET_MODE=""
+VERBOSE=0
+COLOR_FLAG=""
+PATTERNS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help|-help)
+            usage
+            exit 0
+            ;;
+        -c|--context)
+            if [[ -z "${2:-}" ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo -e "${RED}Error: --context requires a numeric argument${NC}" >&2
+                exit 1
+            fi
+            CONTEXT_LINES="$2"
+            shift 2
+            ;;
+        -C|--color)
+            COLOR_FLAG="--color=always"
+            shift
+            ;;
+        -i|--ignore-case)
+            IGNORE_CASE="-i"
+            shift
+            ;;
+        -I|--no-ignore-case)
+            IGNORE_CASE=""
+            shift
+            ;;
+        -n|--line-number)
+            LINE_NUMBERS="--line-number"
+            shift
+            ;;
+        -N|--no-line-number)
+            LINE_NUMBERS=""
+            shift
+            ;;
+        -q|--quiet)
+            QUIET_MODE="--files-with-matches"
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=1
+            shift
+            ;;
+        -*)
+            echo -e "${RED}Error: Unknown option: $1${NC}" >&2
+            usage
+            exit 1
+            ;;
+        *)
+            PATTERNS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ ${#PATTERNS[@]} -lt 2 ]]; then
+    echo -e "${RED}Error: At least two patterns are required${NC}" >&2
+    usage
+    exit 1
 fi
+
+if [[ ${#PATTERNS[@]} -gt $MAX_PATTERNS ]]; then
+    echo -e "${RED}Error: Maximum $MAX_PATTERNS patterns allowed${NC}" >&2
+    exit 1
+fi
+
+# Check if we're in a git repository
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo -e "${YELLOW}Warning: Not in a git repository. Use 'grep' instead of 'git grep' for non-git directories.${NC}" >&2
+    exit 1
+fi
+
+GIT_GREP_CMD=(git grep)
+
+[[ -n "$IGNORE_CASE" ]] && GIT_GREP_CMD+=("$IGNORE_CASE")
+[[ -n "$COLOR_FLAG" ]] && GIT_GREP_CMD+=("$COLOR_FLAG")
+GIT_GREP_CMD+=(-I)  # Skip binary files
+[[ -n "$LINE_NUMBERS" ]] && GIT_GREP_CMD+=("$LINE_NUMBERS")
+
+if [[ -z "$QUIET_MODE" ]]; then
+    GIT_GREP_CMD+=(--break --heading)
+    GIT_GREP_CMD+=(-C "$CONTEXT_LINES")
+else
+    GIT_GREP_CMD+=("$QUIET_MODE")
+fi
+
+for pattern in "${PATTERNS[@]}"; do
+    GIT_GREP_CMD+=(-e "$pattern")
+done
+
+# Add --all-match to require all patterns
+GIT_GREP_CMD+=(--all-match)
+
+if [[ $VERBOSE -eq 1 ]]; then
+    echo -e "${GREEN}Debug: Running command:${NC}" >&2
+    echo "  ${GIT_GREP_CMD[*]}" >&2
+    echo >&2
+fi
+
+"${GIT_GREP_CMD[@]}" || {
+    exit_code=$?
+    if [[ $exit_code -eq 1 ]]; then
+        # No matches found is not an error
+        if [[ $VERBOSE -eq 1 ]]; then
+            echo -e "${YELLOW}No files found containing all patterns${NC}" >&2
+        fi
+        exit 0
+    else
+        exit $exit_code
+    fi
+}
