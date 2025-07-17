@@ -8,6 +8,7 @@
 | File                         | Description                                                              |
 |------------------------------+--------------------------------------------------------------------------|
 | [[file:bin/git-clear-reflog][git-clear-reflog]]             | Clean up the repository from Git reflogs                                 |
+| [[file:bin/git-revert-branch][git-revert-branch]]            | Reset the local branch to match the remote branch.                       |
 | [[file:bin/git-search-for-code-multiple][git-search-for-code-multiple]] | Find files that contain multiple terms, not necessarily on the same line |
 | [[file:bin/git-status-extra][git-status-extra]]             | Show extended Git status for working tree and submodules                 |
 |------------------------------+--------------------------------------------------------------------------|

@@ -17,3 +17,4 @@ mklink () {
 mklink git-clear-reflog
 mklink git-search-for-code-multiple
 mklink git-status-extra
+mklink git-revert-branch

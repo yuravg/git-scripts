@@ -48,6 +48,7 @@ Function Make-SymbolLink-ByName {
 Make-SymbolLink-ByName("git-clear-reflog")
 Make-SymbolLink-ByName("git-search-for-code-multiple")
 Make-SymbolLink-ByName("git-status-extra")
+Make-SymbolLink-ByName("git-revert-branch")
 
 Write-Host ""
 pause

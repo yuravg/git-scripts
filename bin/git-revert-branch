@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+# Reset the local branch to match the remote branch
+
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
+DEFAULT_REMOTE="origin"
+DEFAULT_BRANCH="develop"
+
+RED=''
+GREEN=''
+NC=''
+
+usage() {
+    cat << EOF
+Usage:
+  ${SCRIPT_NAME} [OPTIONS] [REMOTE] [BRANCH]
+
+Reset the local branch to match the remote branch.
+
+ARGUMENTS:
+    REMOTE      The remote repository name (default: ${DEFAULT_REMOTE})
+    BRANCH      The branch name to reset (default: ${DEFAULT_BRANCH})
+
+OPTIONS:
+    -h, --help    Display this help message
+    -f, --force   Skip confirmation prompt
+    -c, --color   Enable colored output
+
+EXAMPLES:
+    ${SCRIPT_NAME}                    # Reset 'develop' branch from 'origin'
+    ${SCRIPT_NAME} upstream           # Reset 'develop' branch from 'upstream'
+    ${SCRIPT_NAME} origin feature     # Reset 'feature' branch from 'origin'
+    ${SCRIPT_NAME} -f origin main     # Force reset 'main' branch without confirmation
+    ${SCRIPT_NAME} -fc                # Force reset with colored output
+
+WARNING: This will DELETE your local branch. All local changes can be LOST.
+EOF
+}
+
+setup_colors() {
+    if [[ -t 1 ]]; then  # Check if stdout is a terminal
+        RED='\033[0;31m'
+        GREEN='\033[0;32m'
+        NC='\033[0m'
+    fi
+}
+
+error() {
+    echo -e "${RED}ERROR: $1${NC}" >&2
+    exit 1
+}
+
+success() {
+    echo -e "${GREEN}SUCCESS: $1${NC}"
+}
+
+force=0
+color=0
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help) usage; exit 0 ;;
+        -f|--force) force=1; shift ;;
+        -c|--color) color=1; shift ;;
+        -cf|-fc) force=1; color=1; shift ;;
+        -*) error "Unknown option: $1" ;;
+        *) break ;;
+    esac
+done
+
+[[ $color -eq 1 ]] && setup_colors
+remote="${1:-${DEFAULT_REMOTE}}"
+branch="${2:-${DEFAULT_BRANCH}}"
+
+git rev-parse --git-dir >/dev/null 2>&1 || error "Not in a Git repository"
+git remote | grep -q "^${remote}$" || error "Remote '${remote}' does not exist"
+
+echo "Fetching '${branch}' from '${remote}'..."
+git fetch "${remote}" "${branch}" || error "Failed to fetch '${branch}' from '${remote}'"
+git ls-remote --heads "${remote}" "${branch}" | grep -q . || error "Branch '${branch}' not found on '${remote}'"
+
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [[ ${force} -eq 0 ]]; then
+    echo "WARNING: This will DELETE local branch '${branch}' and reset it to '${remote}/${branch}'"
+    [[ "${current_branch}" == "${branch}" ]] && echo "You will be switched to 'master' first."
+    read -p "Continue? [y/N]: " -r
+    [[ ! $REPLY =~ ^[Yy]([Ee][Ss])?$ ]] && exit 0
+fi
+
+if [[ "${current_branch}" == "${branch}" ]]; then
+    git checkout master 2>/dev/null || error "Cannot switch to 'master' branch"
+fi
+
+git branch -D "${branch}" 2>/dev/null || error "Failed to delete '${branch}' branch"
+git checkout -b "${branch}" "${remote}/${branch}" || error "Failed to create '${branch}' branch"
+
+success "Branch '${branch}' reset to '${remote}/${branch}'"
