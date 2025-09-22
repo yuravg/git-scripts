@@ -4,29 +4,38 @@
 
 set -euo pipefail
 
-SCRIPT_NAME=$(basename "${BASH_SOURCE##*/}")
+SCRIPT_NAME=$(basename "${BASH_SOURCE[0]}")
 DEFAULT_REMOTE="origin"
 DEFAULT_BRANCH="develop"
 
+# Colors (initialized later based on options)
 RED=''
 GREEN=''
+YELLOW=''
+BLUE=''
 NC=''
+
+# Version information
+VERSION="1.0"
 
 usage() {
     cat << EOF
 Usage:
   ${SCRIPT_NAME} [OPTIONS] [REMOTE] [BRANCH]
 
-Reset the local branch to match the remote branch.
+Reset the local branch to match the remote branch by deleting the local
+branch and recreating it from the remote.
 
 ARGUMENTS:
     REMOTE      The remote repository name (default: ${DEFAULT_REMOTE})
     BRANCH      The branch name to reset (default: ${DEFAULT_BRANCH})
 
 OPTIONS:
-    -h, --help    Display this help message
-    -f, --force   Skip confirmation prompt
-    -c, --color   Enable colored output
+    -h, --help     Display this help message
+    -f, --force    Skip confirmation prompt
+    -c, --color    Enable colored output
+    -v, --version  Show version information
+    -d, --dry-run  Show what would be done without executing
 
 EXAMPLES:
     ${SCRIPT_NAME}                    # Reset 'develop' branch from 'origin'
@@ -34,17 +43,40 @@ EXAMPLES:
     ${SCRIPT_NAME} origin feature     # Reset 'feature' branch from 'origin'
     ${SCRIPT_NAME} -f origin main     # Force reset 'main' branch without confirmation
     ${SCRIPT_NAME} -fc                # Force reset with colored output
+    ${SCRIPT_NAME} -d upstream dev    # Dry run to see what would happen
 
-WARNING: This will DELETE your local branch. All local changes can be LOST.
+WARNING: This will DELETE your local branch. All uncommitted local changes
+         will be LOST. Consider creating a backup branch first.
+
+NOTES:
+    - If you're currently on the target branch, you'll be switched to 'main'
+      or 'master' (whichever exists) before deletion
+    - The script will create a new local branch tracking the remote branch
+    - Use 'git stash' to temporarily save uncommitted changes if needed
+
 EOF
 }
 
+version() {
+    echo "${SCRIPT_NAME} version ${VERSION}"
+}
+
 setup_colors() {
-    if [[ -t 1 ]]; then  # Check if stdout is a terminal
+    if [[ -t 1 && -t 2 ]]; then  # Check if both stdout and stderr are terminals
         RED='\033[0;31m'
         GREEN='\033[0;32m'
+        YELLOW='\033[0;33m'
+        BLUE='\033[0;34m'
         NC='\033[0m'
     fi
+}
+
+log() {
+    echo -e "${BLUE}INFO: $1${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}WARNING: $1${NC}" >&2
 }
 
 error() {
@@ -56,44 +88,174 @@ success() {
     echo -e "${GREEN}SUCCESS: $1${NC}"
 }
 
+# Check if git command exists
+check_git() {
+    command -v git >/dev/null 2>&1 || error "Git is not installed or not in PATH"
+}
+
+# Check if we're in a git repository
+check_git_repo() {
+    git rev-parse --git-dir >/dev/null 2>&1 || error "Not in a Git repository"
+}
+
+# Check if remote exists
+check_remote() {
+    local remote="$1"
+    git remote | grep -q "^${remote}$" || error "Remote '${remote}' does not exist"
+}
+
+# Check if branch exists on remote
+check_remote_branch() {
+    local remote="$1"
+    local branch="$2"
+
+    log "Checking if branch '${branch}' exists on remote '${remote}'..."
+    git ls-remote --heads "${remote}" "${branch}" | grep -q . || \
+        error "Branch '${branch}' not found on remote '${remote}'"
+}
+
+# Find a safe branch to switch to (main or master)
+find_safe_branch() {
+    local safe_branches=("main" "master")
+
+    for branch in "${safe_branches[@]}"; do
+        if git show-ref --verify --quiet "refs/heads/${branch}"; then
+            echo "${branch}"
+            return 0
+        fi
+    done
+
+    # If neither main nor master exist locally, try to find them on origin
+    for branch in "${safe_branches[@]}"; do
+        if git ls-remote --heads origin "${branch}" | grep -q .; then
+            log "Creating local '${branch}' branch from 'origin/${branch}'"
+            git checkout -b "${branch}" "origin/${branch}" >/dev/null 2>&1 && {
+                echo "${branch}"
+                return 0
+            }
+        fi
+    done
+
+    error "Cannot find a safe branch (main/master) to switch to"
+}
+
+# Check for uncommitted changes
+check_uncommitted_changes() {
+    local branch="$1"
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    if [[ "${current_branch}" == "${branch}" ]]; then
+        if ! git diff-index --quiet HEAD --; then
+            warn "You have uncommitted changes in branch '${branch}'"
+            warn "These changes will be lost when the branch is reset"
+            echo "Consider running 'git stash' first to save your changes"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# Main execution function
+execute_reset() {
+    local remote="$1"
+    local branch="$2"
+    local dry_run="$3"
+
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    if [[ "${dry_run}" == "1" ]]; then
+        echo "DRY RUN - The following actions would be performed:"
+        echo "1. Fetch '${branch}' from remote '${remote}'"
+        [[ "${current_branch}" == "${branch}" ]] && echo "2. Switch from '${branch}' to a safe branch"
+        echo "3. Delete local branch '${branch}'"
+        echo "4. Create new local branch '${branch}' from '${remote}/${branch}'"
+        echo "5. Switch to the new '${branch}'"
+        return 0
+    fi
+
+    log "Fetching '${branch}' from '${remote}'..."
+    git fetch "${remote}" "${branch}" || error "Failed to fetch '${branch}' from '${remote}'"
+
+    if [[ "${current_branch}" == "${branch}" ]]; then
+        local safe_branch
+        safe_branch=$(find_safe_branch)
+        log "Switching from '${branch}' to '${safe_branch}'"
+        git checkout "${safe_branch}" >/dev/null 2>&1 || error "Cannot switch to '${safe_branch}' branch"
+    fi
+
+    # Only delete the branch if it exists locally
+    if git show-ref --verify --quiet "refs/heads/${branch}"; then
+        log "Deleting local branch '${branch}'"
+        git branch -D "${branch}" >/dev/null 2>&1 || error "Failed to delete '${branch}' branch"
+    else
+        log "Local branch '${branch}' does not exist - skipping deletion"
+    fi
+
+    log "Creating new local branch '${branch}' from '${remote}/${branch}'"
+    git checkout -b "${branch}" "${remote}/${branch}" >/dev/null 2>&1 || \
+        error "Failed to create '${branch}' branch from '${remote}/${branch}'"
+
+    success "Branch '${branch}' has been reset to match '${remote}/${branch}'"
+}
+
+# Parse command line options
 force=0
 color=0
+dry_run=0
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help) usage; exit 0 ;;
+        -v|--version) version; exit 0 ;;
         -f|--force) force=1; shift ;;
         -c|--color) color=1; shift ;;
+        -d|--dry-run) dry_run=1; shift ;;
         -cf|-fc) force=1; color=1; shift ;;
-        -*) error "Unknown option: $1" ;;
+        -df|-fd) dry_run=1; force=1; shift ;;
+        -cd|-dc) color=1; dry_run=1; shift ;;
+        -cdf|-cfd|-dcf|-dfc|-fcd|-fdc) color=1; dry_run=1; force=1; shift ;;
+        -*) error "Unknown option: $1. Use -h for help." ;;
         *) break ;;
     esac
 done
 
+# Setup colors if requested
 [[ $color -eq 1 ]] && setup_colors
+
+# Get remote and branch arguments
 remote="${1:-${DEFAULT_REMOTE}}"
 branch="${2:-${DEFAULT_BRANCH}}"
 
-git rev-parse --git-dir >/dev/null 2>&1 || error "Not in a Git repository"
-git remote | grep -q "^${remote}$" || error "Remote '${remote}' does not exist"
+# Validate inputs
+[[ -z "$remote" ]] && error "Remote name cannot be empty"
+[[ -z "$branch" ]] && error "Branch name cannot be empty"
 
-echo "Fetching '${branch}' from '${remote}'..."
-git fetch "${remote}" "${branch}" || error "Failed to fetch '${branch}' from '${remote}'"
-git ls-remote --heads "${remote}" "${branch}" | grep -q . || error "Branch '${branch}' not found on '${remote}'"
+# Run pre-flight checks
+check_git
+check_git_repo
+check_remote "$remote"
+check_remote_branch "$remote" "$branch"
 
-current_branch=$(git rev-parse --abbrev-ref HEAD)
-
-if [[ ${force} -eq 0 ]]; then
-    echo "WARNING: This will DELETE local branch '${branch}' and reset it to '${remote}/${branch}'"
-    [[ "${current_branch}" == "${branch}" ]] && echo "You will be switched to 'master' first."
-    read -p "Continue? [y/N]: " -r
-    [[ ! $REPLY =~ ^[Yy]([Ee][Ss])?$ ]] && exit 0
+# Check for uncommitted changes (but don't fail in force mode)
+if [[ $force -eq 0 ]] && ! check_uncommitted_changes "$branch"; then
+    echo
+    read -p "Continue anyway? [y/N]: " -r
+    [[ ! $REPLY =~ ^[Yy]([Ee][Ss])?$ ]] && { echo "Operation cancelled."; exit 0; }
 fi
 
-if [[ "${current_branch}" == "${branch}" ]]; then
-    git checkout master 2>/dev/null || error "Cannot switch to 'master' branch"
+# Confirmation prompt (unless force mode or dry run)
+if [[ ${force} -eq 0 && ${dry_run} -eq 0 ]]; then
+    echo
+    warn "This will DELETE local branch '${branch}' and recreate it from '${remote}/${branch}'"
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    [[ "${current_branch}" == "${branch}" ]] && echo "You will be switched to a safe branch first."
+    echo
+    read -p "Are you sure you want to continue? [y/N]: " -r
+    [[ ! $REPLY =~ ^[Yy]([Ee][Ss])?$ ]] && { echo "Operation cancelled."; exit 0; }
+    echo
 fi
 
-git branch -D "${branch}" 2>/dev/null || error "Failed to delete '${branch}' branch"
-git checkout -b "${branch}" "${remote}/${branch}" || error "Failed to create '${branch}' branch"
-
-success "Branch '${branch}' reset to '${remote}/${branch}'"
+# Execute the main operation
+execute_reset "$remote" "$branch" "$dry_run"
